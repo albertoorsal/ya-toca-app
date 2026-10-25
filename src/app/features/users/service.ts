@@ -1,5 +1,6 @@
 import type { User } from "firebase/auth";
 import {
+  collection,
   doc,
   onSnapshot,
   runTransaction,
@@ -11,6 +12,7 @@ import {
   type FirestoreError,
   type Unsubscribe,
 } from "firebase/firestore";
+import { parseRole } from "@/app/features/rbac/roles";
 import { db } from "@/app/lib/firebase/client";
 import {
   profileUpdateSchema,
@@ -31,6 +33,7 @@ function toProfile(snap: DocumentSnapshot<DocumentData>): UserProfile | null {
     photoURL: (data.photoURL as string | null) ?? null,
     createdAt: toDate(data.createdAt),
     updatedAt: toDate(data.updatedAt),
+    role: parseRole(data.role),
   };
 }
 
@@ -75,4 +78,18 @@ export async function updateUserProfile(
     ...data,
     updatedAt: serverTimestamp(),
   });
+}
+
+export function subscribeToAllUsers(
+  onData: (users: UserProfile[]) => void,
+  onError: (error: FirestoreError) => void,
+): Unsubscribe {
+  return onSnapshot(
+    collection(db, COLLECTION),
+    (snap) =>
+      onData(
+        snap.docs.map(toProfile).filter((p): p is UserProfile => p !== null),
+      ),
+    onError,
+  );
 }

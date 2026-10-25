@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/app/features/auth/auth-provider";
+import { hasAtLeast, type Role } from "@/app/features/rbac/roles";
 
 function AuthStatus({ message }: { message: string }) {
   return (
@@ -12,6 +13,28 @@ function AuthStatus({ message }: { message: string }) {
       </p>
     </main>
   );
+}
+
+/**
+ * Renders `children` only if the user's role is at least `min`.
+ * Use inside <RequireAuth>. UX only: Firestore rules and the API enforce it.
+ */
+export function RequireRole({
+  min,
+  children,
+}: {
+  min: Role;
+  children: React.ReactNode;
+}) {
+  const { role, loading } = useAuth();
+
+  if (loading) return <AuthStatus message="Checking permissions…" />;
+
+  if (!role || !hasAtLeast(role, min)) {
+    return <AuthStatus message="You don't have access to this page." />;
+  }
+
+  return <>{children}</>;
 }
 
 /**

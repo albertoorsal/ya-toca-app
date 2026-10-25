@@ -3,7 +3,7 @@
 import {
   createUserWithEmailAndPassword,
   GoogleAuthProvider,
-  onAuthStateChanged,
+  onIdTokenChanged,
   signInWithEmailAndPassword,
   signInWithPopup,
   signOut as firebaseSignOut,
@@ -23,6 +23,8 @@ import {
 import { ensureUserProfile } from "@/app/features/users/service";
 import { auth } from "@/app/lib/firebase/client";
 
+import { parseRole, type Role } from "@/app/features/rbac/roles";
+
 type AuthContextValue = {
   user: User | null;
   loading: boolean;
@@ -35,6 +37,9 @@ type AuthContextValue = {
   ) => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+
+  role: Role | null;
+  refreshRole: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -47,13 +52,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const [role, setRole] = useState<Role | null>(null);
 
+  // onIdTokenChanged fires on sign-in AND on every token refresh, so role
+  // changes are picked up (onAuthStateChanged would miss them).
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(
+    const unsubscribe = onIdTokenChanged(
       auth,
-      (next) => {
+      async (next) => {
+        try {
+          const result = next ? await next.getIdTokenResult() : null;
+          setRole(result ? parseRole(result.claims.role) : null);
+          setError(null);
+        } catch (err) {
+          setError(err instanceof Error ? err : new Error("Auth error"));
+        }
+
         setUser(next);
-        setError(null);
         setLoading(false);
       },
       (err) => {
@@ -62,6 +77,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
     );
     return unsubscribe;
+  }, []);
+
+  // force refresh the token, which re-triggers the listener above.
+  const refreshRole = useCallback(async () => {
+    await auth.currentUser?.getIdToken(true);
   }, []);
 
   // Google: sign-in and sign-up are the same flow. ensureUserProfile only
@@ -100,6 +120,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       loading,
       error,
+      role,
+      refreshRole,
       signInWithGoogle,
       signUpWithEmail,
       signInWithEmail,
@@ -109,6 +131,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       loading,
       error,
+      role,
+      refreshRole,
       signInWithGoogle,
       signUpWithEmail,
       signInWithEmail,

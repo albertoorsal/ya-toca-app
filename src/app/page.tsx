@@ -1,20 +1,19 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 
 import { RequireAuth } from "@/app/features/auth/guard";
 import { useAuth } from "@/app/features/auth/auth-provider";
+import { hasAtLeast } from "@/app/features/rbac/roles";
 import { useUserProfile } from "@/app/features/users/use-user-profile";
 
-function HomeManager() {
-  return <h2 className="text-lg">Hello from Manager</h2>;
+function ProfessionalPanel() {
+  return <h2 className="text-lg">Hello from Professional</h2>;
 }
 
-// TODO(RBAC): admin-only list of user profiles. Needs a Firestore rule that
-// lets admins list /users before it can be built.
-
 function HomeContent() {
-  const { user, signOut } = useAuth();
+  const { user, role, signOut } = useAuth();
   const { profile } = useUserProfile(user?.uid);
   const [signingOut, setSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState<string | null>(null);
@@ -37,8 +36,14 @@ function HomeContent() {
       <header className="flex items-center justify-between gap-4">
         <h1 className="text-2xl font-semibold">Ya Toca</h1>
         <div className="flex items-center gap-3">
+          {role === "admin" && (
+            <Link href="/admin" className="text-sm underline">
+              Admin
+            </Link>
+          )}
           <span className="text-sm text-zinc-500">
             {profile?.displayName ?? user?.email}
+            {role ? ` · ${role}` : ""}
           </span>
           <button
             onClick={handleSignOut}
@@ -56,7 +61,7 @@ function HomeContent() {
         </p>
       )}
 
-      <HomeManager />
+      {role && hasAtLeast(role, "professional") && <ProfessionalPanel />}
     </main>
   );
 }

@@ -1,3 +1,4 @@
+import type { Role } from "@/app/features/rbac/roles";
 import { z } from "zod";
 
 export const displayNameSchema = z
@@ -19,4 +20,5 @@ export type UserProfile = {
   photoURL: string | null;
   createdAt: Date | null;
   updatedAt: Date | null;
+  role: Role;
 };

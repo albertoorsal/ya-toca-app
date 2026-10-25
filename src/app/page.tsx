@@ -7,6 +7,7 @@ import { RequireAuth } from "@/app/features/auth/guard";
 import { useAuth } from "@/app/features/auth/auth-provider";
 import { hasAtLeast } from "@/app/features/rbac/roles";
 import { useUserProfile } from "@/app/features/users/use-user-profile";
+import { PublishBusinessCta } from "@/app/features/businesses/publish-cta";
 
 function ProfessionalPanel() {
   return <h2 className="text-lg">Hello from Professional</h2>;
@@ -54,6 +55,14 @@ function HomeContent() {
           </button>
         </div>
       </header>
+
+      {/* Routes publish my business */}
+      <div className="flex items-center gap-4">
+        <PublishBusinessCta />
+        <Link href="/businesses" className="text-sm underline">
+          Browse businesses
+        </Link>
+      </div>
 
       {signOutError && (
         <p className="text-sm text-red-600" role="alert">

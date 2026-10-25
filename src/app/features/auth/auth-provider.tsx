@@ -81,7 +81,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // force refresh the token, which re-triggers the listener above.
   const refreshRole = useCallback(async () => {
-    await auth.currentUser?.getIdToken(true);
+    const current = auth.currentUser;
+    if (!current) return;
+    const result = await current.getIdTokenResult(true); // force refresh
+    setRole(parseRole(result.claims.role));
   }, []);
 
   // Google: sign-in and sign-up are the same flow. ensureUserProfile only

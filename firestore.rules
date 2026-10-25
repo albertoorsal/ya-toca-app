@@ -13,7 +13,7 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    // Role from the custom claim in the token. No claim => 'user'.
+    // Rol que viene en el custom claim del token. Sin claim => 'user'.
     function role() {
       return request.auth.token.get('role', 'user');
     }
@@ -37,12 +37,12 @@ service cloud.firestore {
     // ---------- users (profiles) ----------
 
     match /users/{userId} {
-      // Owners read their profile; admins can read and list all of them.
+      // Cada quien lee su perfil; un admin puede leer y listar todos.
       allow read: if isOwner(userId) || isAdmin();
 
-      // Create: only your own profile, exactly these fields, and the email
-      // must match the one in your token. `role` can NOT be sent from the
-      // client: only the server (Admin SDK) writes it.
+      // Crear: solo tu propio perfil, exactamente estos campos, y el email
+      // debe coincidir con el del token. El campo `role` NO se puede enviar
+      // desde el cliente: solo lo escribe el servidor (Admin SDK).
       allow create: if isOwner(userId)
         && request.resource.data.keys().hasOnly(['uid', 'email', 'displayName', 'photoURL', 'createdAt', 'updatedAt'])
         && request.resource.data.keys().hasAll(['uid', 'email', 'displayName', 'photoURL', 'createdAt', 'updatedAt'])
@@ -53,17 +53,68 @@ service cloud.firestore {
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time;
 
-      // Update: only displayName (and updatedAt). Nobody changes `role` from
-      // the client, not even admins: role changes go through the API route.
+      // Actualizar: solo displayName (y el sello updatedAt). Nadie puede
+      // cambiar `role` desde el cliente, ni siquiera un admin: los cambios
+      // de rol pasan por la ruta del servidor.
       allow update: if isOwner(userId)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'updatedAt'])
         && validName(request.resource.data.displayName)
         && request.resource.data.updatedAt == request.time;
 
+      // Los perfiles no se borran desde el cliente.
       allow delete: if false;
     }
 
-    // ---------- Everything else: denied ----------
+    // ---------- businesses ----------
+
+    function validBusiness(d) {
+      return d.keys().hasOnly(['name', 'category', 'description', 'phone', 'city', 'address', 'status', 'ownerId', 'createdAt', 'updatedAt'])
+        && d.ownerId is string
+        && d.name is string && d.name.size() >= 2 && d.name.size() <= 80
+        && d.category in ['barber', 'dentist', 'doctor', 'nutritionist', 'psychologist', 'other']
+        && d.description is string && d.description.size() <= 1000
+        && d.phone is string && d.phone.size() >= 7 && d.phone.size() <= 20
+        && d.city is string && d.city.size() >= 2 && d.city.size() <= 80
+        && d.address is string && d.address.size() >= 5 && d.address.size() <= 160
+        && d.status in ['draft', 'published']
+        && d.updatedAt == request.time;
+    }
+
+    match /businesses/{businessId} {
+      // Los negocios publicados son públicos. Borradores: solo dueño o admin.
+      allow read: if resource.data.status == 'published'
+        || isOwner(resource.data.ownerId)
+        || isAdmin();
+
+      // Solo profesionales/admins crean, y solo a su nombre.
+      allow create: if isProfessionalOrAbove()
+        && isOwner(request.resource.data.ownerId)
+        && request.resource.data.keys().hasAll(['name', 'category', 'description', 'phone', 'city', 'address', 'status', 'ownerId', 'createdAt', 'updatedAt'])
+        && validBusiness(request.resource.data)
+        && request.resource.data.createdAt == request.time;
+
+      allow update: if
+        // El dueño edita; ownerId y createdAt nunca cambian.
+        (
+          isProfessionalOrAbove()
+          && isOwner(resource.data.ownerId)
+          && validBusiness(request.resource.data)
+          && request.resource.data.ownerId == resource.data.ownerId
+          && request.resource.data.createdAt == resource.data.createdAt
+        )
+        // Moderación: un admin solo puede regresar un negocio a borrador.
+        || (
+          isAdmin()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt'])
+          && request.resource.data.status == 'draft'
+          && request.resource.data.updatedAt == request.time
+        );
+
+      // El dueño puede borrar; el admin también, por moderación.
+      allow delete: if isOwner(resource.data.ownerId) || isAdmin();
+    }
+
+    // ---------- Todo lo demás: denegado ----------
 
     match /{document=**} {
       allow read, write: if false;
